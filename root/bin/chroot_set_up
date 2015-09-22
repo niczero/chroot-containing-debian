@@ -16,7 +16,7 @@ fi
 
 # Apt
 if ! grep -q 'manual edits only' /etc/apt/sources.list; then
-  cat /root/build/apt_sources.lst >/etc/apt/sources.list
+  cat /root/build/root/meta/apt_sources.lst >/etc/apt/sources.list
   apt-get update
 fi
 

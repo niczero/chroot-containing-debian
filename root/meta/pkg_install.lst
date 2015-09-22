@@ -1,0 +1,8 @@
+build-essential
+figlet
+git
+less
+openssh-client
+openssh-server
+screen
+vim
