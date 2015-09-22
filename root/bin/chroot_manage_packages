@@ -1,0 +1,14 @@
+#!/bin/bash
+
+set -e -u
+
+declare -r PROGNAME=${0##*/}
+declare -i DEBUG=1
+
+[ -r /root/build/pkg_install.lst ] \
+&& xargs apt-get -y install $(</root/build/pkg_install.lst)
+
+[ -r /root/build/pkg_remove.lst ] \
+&& xargs apt-get -y purge $(</root/build/pkg_remove.lst)
+
+exit 0
