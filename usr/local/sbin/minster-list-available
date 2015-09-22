@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+# List packages (and versions) that are available
+#
+# Depends: dctrl-tools
+
+set -e -u
+
+declare -r   PATH=/bin:/usr/bin
+declare -r   PROGNAME=${0##*/}
+declare -rix DEBUG=1
+
+function fail {
+    echo "${PROGNAME}: ${1:-"Unknown error"}" >&2
+    exit 1
+}
+trap fail ERR
+
+if [ /var/cache/apt/pkgcache.bin -nt /var/lib/dpkg/available ]; then
+    /usr/sbin/sync-available &>/dev/null
+fi
+
+grep-available -FPackage -sPackage,Version -n "${1:-""}" \
+| \
+grep -v ^$ \
+| \
+paste -sd'\t\n' \
+| \
+sort
+
+exit

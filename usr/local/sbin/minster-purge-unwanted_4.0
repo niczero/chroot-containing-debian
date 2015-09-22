@@ -1,0 +1,175 @@
+#!/bin/bash
+#
+# Quickly distil installed packages down to just those required
+#
+# Depends: deborphan, dialog
+
+set -e -u
+
+declare -r   PATH=/usr/sbin:/usr/bin:/sbin:/bin
+declare -r   PROGNAME=${0##*/}
+declare -r   DB=/var/lib/deborphan/keep
+declare -i   NICE_MODE=1
+
+function clean_up {
+  rm -f ${i:-/fictitious} ${o:-/fictitious}
+}
+
+function fail {
+  echo "${PROGNAME}: ${1:-"Unknown error"}" >&2
+  clean_up
+  exit 1
+}
+trap fail 1 2 3 5 6 15
+trap fail ERR
+
+which deborphan &>/dev/null || fail 'Requires deborphan'
+which dialog    &>/dev/null || fail 'Requires dialog'
+which apt-cache &>/dev/null || fail 'Requires apt-cache'
+
+touch $DB &>/dev/null || fail "Requires edit privs ($DB)"
+
+apt-cache gencaches
+which resize &>/dev/null && eval $(resize) || LINES=24 && COLUMNS=80
+i=$(mktemp -t ${PROGNAME}.XXXXXX)
+o=$(mktemp -t ${PROGNAME}.XXXXXX)
+
+function show_keepers {
+  list=$(deborphan --keep-file=$DB --list-keep | sort)
+
+  if [ -z "$list" ]; then
+    dialog --clear --no-shadow \
+        --title ' None ' \
+        --msgbox 'There are currently no protected packages (keepers)' $LINES $COLUMNS
+    return
+  fi
+
+  while [ -n "$list" ]; do
+    checklist=''
+    for pkg in $list; do
+      checklist="$checklist $pkg . off"
+    done
+    dialog --clear --no-shadow \
+        --title ' Keepers ' \
+        --ok-label Next \
+        --separate-output \
+        --checklist 'Check any to remove' $LINES $COLUMNS $(( $LINES - 7 )) $checklist \
+        2>$i || break
+
+    rmlist=$(<$i)
+    if [ -z "$rmlist" ]; then
+      break
+    fi
+
+    deborphan --keep-file=$DB --del-keep $rmlist
+
+    list=$(deborphan --keep-file=$DB --list-keep | sort)
+  done
+}
+
+function selective_purge {
+  list=$(deborphan --keep-file=$DB -a -n --no-show-section --priority=2 | sort)
+
+  if [ -z "$list" ]; then
+    dialog --clear --no-shadow \
+        --title ' None ' \
+        --msgbox 'There are currently no removable packages (orphans)' $LINES $COLUMNS
+    return
+  fi
+
+  while [ -n "$list" ]; do
+    checklist=''
+    for pkg in $list; do
+      checklist="$checklist $pkg . off"
+    done
+    dialog --clear --no-shadow \
+        --title ' Candidates ' \
+        --ok-label Next \
+        --separate-output \
+        --checklist 'Check those to be removed' $LINES $COLUMNS $(( $LINES - 7)) $checklist \
+        2>$i || break
+
+    purge=$(<$i)
+
+    if [ -z "$purge" ]; then
+      break
+    else
+      dialog --clear --no-shadow \
+          --title ' Purge packages ' \
+          --yes-label Purge \
+          --no-label Cancel \
+          --yesno "Confirm purging these packages\n\n$purge" $LINES $COLUMNS 2>$o \
+      && apt-get --purge remove $purge
+    fi
+
+    list=$(deborphan --keep-file=$DB -a -n --no-show-section --priority=2 | sort)
+  done
+}
+
+function show_orphans {
+  if [ $NICE_MODE -ne 0 ]; then nm=""; else nm="-n"; fi
+  list=$(deborphan --keep-file=$DB -a $nm --no-show-section --priority=2 | sort)
+
+  if [ -z "$list" ]; then
+    dialog --clear --no-shadow \
+        --title ' None ' \
+        --msgbox 'There are currently no removable packages (orphans)' $LINES $COLUMNS
+    return
+  fi
+
+  while [ -n "$list" ]; do
+    checklist=''
+    for pkg in $list; do
+      checklist="$checklist $pkg . off"
+    done
+    dialog --clear --no-shadow \
+        --title ' Orphans ' \
+        --ok-label Next \
+        --separate-output \
+        --checklist 'Check any to keep' $LINES $COLUMNS $(( $LINES - 7 )) $checklist \
+        2>$i || break
+
+    addkeep=$(<$i)
+
+    if [ -n "$addkeep" ]; then
+      deborphan --keep-file=$DB --add-keep $addkeep
+    else
+      dialog --clear --no-shadow \
+          --title ' Purge packages ' \
+          --yes-label Purge \
+          --no-label Cancel \
+          --yesno "Confirm purging these packages\n\n$list" $LINES $COLUMNS 2>$o \
+      && apt-get --purge remove $list
+    fi
+
+    list=$(deborphan --keep-file=$DB -a $nm --no-show-section --priority=2 | sort)
+  done
+}
+
+# Main loop (for action selection)
+while :; do
+  if [ $NICE_MODE -ne 0 ]; then
+    nm='Ignore recommendations and suggestions'
+  else
+    nm='Respect recommendations and suggestions'
+  fi
+  dialog --clear --no-shadow \
+      --title ' Purging unwanted packages (orphans) ' \
+      --menu "Choose an action" $LINES $COLUMNS $(( $LINES - 7 )) \
+      1 'Show orphans' \
+      2 'Show keepers' \
+      3 'Selective purge' \
+      4 "$nm" \
+      2>$o || break
+
+  case $(<$o) in
+  1)  show_orphans;;
+  2)  show_keepers;;
+  3)  selective_purge;;
+  4)  if [ $NICE_MODE -ne 0 ]; then NICE_MODE=0; else NICE_MODE=1; fi;;
+  esac
+
+done
+
+clean_up
+exit

@@ -1,0 +1,27 @@
+#!/bin/bash
+#
+# List packages and versions that are installed
+#
+# Depends: dpkg-query
+
+set -e -u
+
+declare -r   PATH=/bin:/usr/bin
+declare -r   PROGNAME=${0##*/}
+
+function fail { echo "${PROGNAME}: ${1:-"Unknown error"}" >&2; exit 1; }
+trap fail ERR
+
+dpkg-query --list \
+| \
+grep -v ^r | grep -v ^p \
+| \
+cut -nb2- \
+| \
+grep ^i \
+| \
+while read s p v d; do
+  echo "$p	$v"
+done \
+| \
+sort

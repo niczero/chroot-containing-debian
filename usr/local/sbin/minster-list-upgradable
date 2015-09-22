@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+# List packages having upgrades available
+#
+# Depends: apt
+
+set -e -u
+
+declare -r   PATH=/bin:/usr/bin
+declare -r   PROGNAME=${0##*/}
+declare -rix DEBUG=1
+
+function fail {
+    echo "${PROGNAME}: ${1:-"Unknown error"}" >&2
+    exit 1
+}
+trap fail ERR
+
+apt_cache=/var/cache/apt
+candidate="$( [ -r $apt_cache ] \
+    && find $apt_cache -maxdepth 1 -name pkgcache.bin -daystart -mtime +1)"
+if [ -n "$candidate" -a -w $apt_cache ]; then
+    apt-get update
+else
+    echo "apt cache looks out-of-date" >&2
+fi
+
+apt-get --no-act dist-upgrade \
+| \
+grep ^Inst \
+| \
+cut -d' ' -f2 \
+| \
+sort
+
+exit

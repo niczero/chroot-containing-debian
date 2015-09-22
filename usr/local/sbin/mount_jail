@@ -1,0 +1,31 @@
+#!/bin/bash
+
+set -e -u
+
+declare -r   PROGNAME=${0##*/}
+declare      JAIL=${1:-unknown}
+declare -rix DEBUG=1
+
+function fail { echo "${PROGNAME}: ${1:-"Unknown error"}" >&2; exit 1; }
+trap fail ERR
+
+[ -d /opt/jail/"$JAIL" ] || fail "Failed to find jail ($JAIL)"
+
+cp -p /etc/mtab /opt/jail/"$JAIL"/etc/mtab
+mount -t proc proc     /opt/jail/"$JAIL"/proc
+mount --bind /dev      /opt/jail/"$JAIL"/dev
+mount -t devpts devpts /opt/jail/"$JAIL"/dev/pts
+mount --bind /sys      /opt/jail/"$JAIL"/sys
+mkdir -p /opt/jail/"$JAIL"/run/shm
+mount --bind /run/shm  /opt/jail/"$JAIL"/run/shm
+mkdir -p /opt/jail/"$JAIL"/opt/perl
+mount --bind /opt/perl /opt/jail/"$JAIL"/opt/perl
+
+v="$(</opt/jail/$JAIL/etc/debian_version)"
+if [ "$v" != "${v#7.}" ]; then
+  mount --bind /opt/jail/wheezy/usr/share /opt/jail/"$JAIL"/usr/share
+elif [ "$v" != "${v#8.}" ]; then
+  mount --bind /opt/jail/jessie/usr/share /opt/jail/"$JAIL"/usr/share
+fi
+
+exit

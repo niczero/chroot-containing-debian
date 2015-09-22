@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# List packages with their one-line descriptions
+#
+# Depends: dctrl-tools
+
+set -e -u
+
+declare -r   PATH=/bin:/usr/bin
+declare -r   PROGNAME=${0##*/}
+declare -rix DEBUG=1
+
+function fail {
+    echo "${PROGNAME}: ${1:-"Unknown error"}" >&2
+    exit 1
+}
+trap fail ERR
+
+if [ /var/cache/apt/pkgcache.bin -nt /var/lib/dpkg/available ]; then
+    /usr/sbin/sync-available &>/dev/null
+fi
+
+while read pkg; do
+    grep-available -FPackage -X -sPackage,Description -n "$pkg" 2>/dev/null \
+    | \
+    grep ^[a-z] \
+    | \
+    paste -sd'\t\n' \
+    | \
+    sort
+done
+
+exit

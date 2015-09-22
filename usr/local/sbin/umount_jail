@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -u
+
+declare -r   PROGNAME=${0##*/}
+declare      JAIL=${1:-unknown}
+declare -rix DEBUG=1
+
+function fail { echo "${PROGNAME}: ${1:-"Unknown error"}" >&2; exit 1; }
+trap fail ERR
+
+[ -d /opt/jail/"$JAIL" ] || fail "Failed to find jail ($JAIL)"
+
+if [ "$(</opt/jail/$JAIL/etc/debian_version)" == 7.4 ]; then
+  umount -l /opt/jail/"$JAIL"/usr/share || true
+fi
+
+umount -l /opt/jail/"$JAIL"/sys || true
+umount -l /opt/jail/"$JAIL"/proc || true
+umount -l /opt/jail/"$JAIL"/dev/pts || true
+umount -l /opt/jail/"$JAIL"/dev || true
+umount -l /opt/jail/"$JAIL"/run/shm || true
+umount -l /opt/jail/"$JAIL"/opt/perl || true
+#umount -l /opt/jail/"$JAIL"/data || true
+
+exit
+
+
+exit

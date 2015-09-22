@@ -1,0 +1,21 @@
+#!/bin/bash
+#
+# Update database of available packages
+#
+# Depends: apt
+
+set -e -u
+
+declare -r   PATH=/bin:/usr/bin
+declare -r   PROGNAME=${0##*/}
+declare -rix DEBUG=1
+
+function fail {
+    echo "${PROGNAME}: ${1:-"Unknown error"}" >&2
+    exit 1
+}
+trap fail ERR
+
+apt-get update && /usr/sbin/sync-available
+
+exit

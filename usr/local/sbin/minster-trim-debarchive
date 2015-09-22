@@ -1,0 +1,161 @@
+#!/usr/bin/perl
+#
+# RT=357487
+
+use strict;
+use warnings;
+
+use Dpkg::Version qw(version_compare);
+
+my %installed = ();
+
+eval {
+    my $pid = open(STATUS, '/usr/bin/dpkg-query -l | /bin/grep ^i |')
+        or die 'Failed to get package status feed';
+    while (defined($_ = <STATUS>)) {
+        chomp;
+        if (/^\w\w\s+(\S+)\s+(\S+)\s/) {
+            $installed{$1} = $2;
+        }
+        else {
+            die 'Unrecognised package status line';
+        }
+    }
+    close(STATUS);
+};
+if ($@) {
+    die "Failed to build list of installed versions\n". $@;
+}
+
+my %candidate = ( %installed );
+
+eval {
+    my $archive_dir = '/var/cache/apt/archives';
+    opendir(AVAIL, $archive_dir)
+        or die 'Failed to read archive dir';
+    while (defined(my $deb = readdir(AVAIL))) {
+        chomp $deb;
+        if ($deb =~ /^([^_]+)_([^_]+)_.+\.deb$/) {
+            my ($p, $v) = ($1, $2);
+            $v =~ s/%3a/:/g;
+            if (exists $candidate{$p}) {
+                my $cmp = version_compare($candidate{$p}, $v);
+                if ($cmp < 0) {
+                    # Found a maximal version
+                    unlink $archive_dir .'/'. $p .'_'. $v .'_*'
+                        unless $installed{$p} && $installed{$p} eq $v;
+                    $candidate{$p} = $v;
+                }
+                elsif ($cmp > 0) {
+                    # Found a non-maximal version
+                    unlink $archive_dir .'/'. $deb
+                        unless ($installed{$p} && $installed{$p} eq $v);
+                }
+            }
+            else {
+                $candidate{$p} = $v;
+            }
+        }
+        elsif ($deb =~ /\.deb$/) {
+            warn "Ignoring unrecognised file ($deb)";
+        }
+    }
+    closedir(AVAIL);
+};
+if ($@) {
+    die "Failed to build list of available versions\n". $@;
+}
+
+__END__
+
+sub version_compare {
+    my ($a, $b) = @_;
+    my $r = undef;
+    return $r unless defined($a) && defined($b);
+    my @a_components = version_components($a);
+    my @b_components = version_components($b);
+    if ($r = $a_components[0] <=> $b_components[0]) {
+        return $r;
+    }
+    elsif ($r = subversion_cmp($a_components[1], $b_components[1])) {
+        return $r;
+    }
+    else {
+        return subversion_cmp($a_components[2], $b_components[2]);
+    }
+}
+
+sub subversion_cmp {
+    my ($a, $b) = @_;
+    my $r = undef;
+    return $r unless defined($a) && defined($b);
+    my ($a1, $a2, $b1, $b2) = ('', $a, '', $b);
+    if ($a =~ /^(\D*)(.*)$/) {
+        ($a1, $a2) = ($1, $2);
+    }
+    if ($b =~ /^(\D*)(.*)$/) {
+        ($b1, $b2) = ($1, $2);
+    }
+    if ($r = $a1 cmp $b1) {
+        return $r;
+    }
+    elsif ($a2 eq '' and $b2 eq '') {
+        return 0;
+    }
+    elsif ($a2 eq '') {
+        return -1;
+    }
+    elsif ($b2 eq '') {
+        return 1;
+    }
+    else {
+        return subversion_numcmp($a2, $b2);
+    }
+}
+
+sub subversion_numcmp {
+    my ($a, $b) = @_;
+    my $r = undef;
+    return $r unless defined($a) && defined($b);
+    my ($a1, $a2, $b1, $b2) = ('', $a, '', $b);
+    if ($a =~ /^(\d*)(.*)$/) {
+        ($a1, $a2) = ($1, $2);
+    }
+    if ($b =~ /^(\d*)(.*)$/) {
+        ($b1, $b2) = ($1, $2);
+    }
+    if ($r = $a1 <=> $b1) {
+        return $r;
+    }
+    elsif ($a2 eq '' and $b2 eq '') {
+        return 0;
+    }
+    elsif ($a2 eq '') {
+        return -1;
+    }
+    elsif ($b2 eq '') {
+        return 1;
+    }
+    else {
+        return subversion_cmp($a2, $b2);
+    }
+}
+
+sub version_components {
+    my ($a) = @_;
+    my @c = (0,'','');
+    if ($a =~ /^([^:]+):(.+)$/) {
+        ($c[0], $a) = (0 + $1, $2);
+    }
+    else {
+        $c[0] = 0;
+    }
+    if ($a =~ /^(.+)-([^-]+)$/) {
+        ($c[1], $c[2]) = (''. $1, ''. $2);
+    }
+    else {
+        ($c[1], $c[2]) = (''. $a, '0');
+    }
+    return @c;
+}
+

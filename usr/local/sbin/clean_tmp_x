@@ -1,0 +1,18 @@
+#!/bin/bash
+#
+
+set -e -u
+
+declare -r  PROGNAME=${0##*/}
+declare -x  PATH=/bin:/usr/bin
+declare -ir DEBUG=${DEBUG:-0}
+declare     DIR=/tmp/x
+
+function fatal { echo "${PROGNAME}: ${1:-"Unknown error"}" >&2; exit 1; }
+trap fatal ERR
+
+rm -rf --preserve-root "$DIR"
+mkdir -p "$DIR"
+chmod 1777 "$DIR"
+
+exit
