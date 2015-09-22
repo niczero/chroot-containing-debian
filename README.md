@@ -14,7 +14,7 @@ echo devel >/opt/jail/devel/etc/debian_chroot
 * Clone this repo
 ```
 cd /opt/jail/devel
-git clone https://github.com/niczero/chroot-containing-debian/ root/build
+git clone --depth 1 https://github.com/niczero/chroot-containing-debian.git root/build
 ```
 
 * Install helpers on the host
@@ -30,5 +30,7 @@ chroot /opt/jail/devel
 
 * Run initial setup
 ```
+dpkg-reconfigure debconf
 /root/build/root/bin/chroot_set_up
+apt-get install locales
 ```
